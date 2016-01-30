@@ -1,0 +1,28 @@
+{ 
+  :aws {
+    :credentials ".aws.edn" 
+    :s3 {
+      :bucket :www.streambrightdata.com
+      :region :us-east-1
+    }
+  }
+  :env {
+    :dev {
+      :min-conn 10
+      :max-conn 15
+      :thread-count 3
+      :thread-wait 1000
+      :channel-timeout 5000
+    }
+    :prod {
+      :min-conn 16
+      :max-conn 64
+      :thread-count 32
+      :thread-wait 5000
+      :channel-timeout 10000
+    }
+  }
+  :avro-schemas {
+    :amazon-log-schema {}
+  }
+};end

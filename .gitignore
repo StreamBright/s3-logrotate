@@ -1,0 +1,5 @@
+.aws.edn
+target/
+.lein-repl-history
+.nrepl-port
+.lein-failures
