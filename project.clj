@@ -18,19 +18,17 @@
   :license {:name "Apache License 2.0"
             :url "http://www.apache.org/licenses/LICENSE-2.0"}
   :dependencies [
-    [org.clojure/clojure        "1.7.0"   ]
-    [com.damballa/abracad       "0.4.13"  ]
-    [cheshire                   "5.5.0"   ]
-    [org.clojure/tools.cli      "0.3.3"   ]
-    [org.clojure/tools.logging  "0.3.1"   ]
-    [org.slf4j/slf4j-log4j12    "1.7.12"  ]
-    [log4j/log4j                "1.2.17"  ]
-    [amazonica "0.3.49" 
-      :exclusions [com.amazonaws/aws-java-sdk]]
-    [com.amazonaws/aws-java-sdk-core "1.10.49"]
-    [com.amazonaws/aws-java-sdk-s3 "1.10.49"]
-    [joda-time                  "2.8.1"   ]
-    [org.clojure/test.check     "0.9.0"   ]
+    [org.clojure/clojure              "1.7.0"   ]
+    [com.damballa/abracad             "0.4.13"  ]
+    [cheshire                         "5.5.0"   ]
+    [org.clojure/tools.cli            "0.3.3"   ]
+    [org.clojure/tools.logging        "0.3.1"   ]
+    [org.slf4j/slf4j-log4j12          "1.7.12"  ]
+    [log4j/log4j                      "1.2.17"  ]
+    [com.amazonaws/aws-java-sdk-core  "1.10.49" ]
+    [com.amazonaws/aws-java-sdk-s3    "1.10.49" ]
+    [joda-time                        "2.8.1"   ]
+    [org.clojure/test.check           "0.9.0"   ]
   ]
   :exclusions [
     javax.mail/mail

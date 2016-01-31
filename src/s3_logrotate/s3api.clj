@@ -114,27 +114,31 @@
 
 (defn get-object 
   "Gets S3 object"
-  [^AmazonS3Client amazon-s3-client ^String bucket-name ^String key]
-  (.getObject amazon-s3-client bucket-name key))
+  [^AmazonS3Client amazon-s3-client ^String bucket-name ^String s3-key]
+  (.getObject amazon-s3-client bucket-name s3-key))
 
-(defn get-object-content  
-  "Gets the input stream containing the contents of this object."
+(defn get-object-content-unsafe  
+  "Gets the input stream containing the contents of this object.
+  This function returns an InputStream, holding onto it result in resource pool
+  exhaustion"
   ^S3ObjectInputStream [^S3Object object]
   (.getObjectContent object))
-
-(defn get-lines
-  "Returns a lazy-sequence of lines"
-  [^S3ObjectInputStream input-stream]
-  (line-seq (io/reader input-stream)))
 
 (defn close-object
   "Closes object"
   [^S3Object object]
   (.close object))
-;; we need a simple way to access all the items in a bucket (or bucket + folder )
-; 
-; using iterate it might be possible to implement a lazy sequence that iterates over
-; all of the items 
+
+(defn get-object-content-safe
+  ""
+  [^S3Object object]
+  (let [
+          ^PersistentVector return  (with-open 
+                                      [rdr (io/reader (get-object-content-unsafe object))] 
+                                       (reduce conj () (line-seq rdr)))
+                            _       (close-object object) ]
+    ; returning a vector of lines
+    return))
 
 (defn get-s3-object-summary-clj
   "Returns a Clojure representation of a S3ObjectSummary"
