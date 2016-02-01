@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "amazon-log",
+  "namespace": "com.streambright.avro",
+  "fields": [{
+      "name": "bucket_owner",
+      "type": "string",
+      "doc": "The canonical user ID of the owner of the source bucket."
+    }
+  ],
+  "doc:": "Schema for Amazon log format - http://docs.aws.amazon.com/AmazonS3/latest/dev/LogFormat.html"
+}

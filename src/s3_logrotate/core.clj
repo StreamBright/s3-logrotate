@@ -16,15 +16,17 @@
         :author "Istvan Szukacs"  } 
   s3-logrotate.core
   (:require
-    [s3-logrotate.cli         :as   cli     ]
-    [s3-logrotate.s3api       :as   s4      ]
-    [clojure.tools.logging    :as   log     ]
-    [clojure.edn              :as   edn     ]
-    [clojure.string           :as   string  ]
-    [abracad.avro             :as   avro    ]
-    [clojure.java.io          :as   io      ]
-    [cheshire.core            :as   json    ]
-    [clojure.walk             :as   walk    ]
+    [s3-logrotate.cli         :as     cli                   ]
+    [s3-logrotate.s3api       :as     s4                    ]
+    [clojure.tools.logging    :as     log                   ]
+    [clojure.edn              :as     edn                   ]
+    [clojure.string           :as     string                ]
+    [abracad.avro             :as     avro                  ]
+    [clojure.java.io          :as     io                    ]
+    [cheshire.core            :as     json                  ]
+    [clojure.walk             :as     walk                  ]
+    [abracad.avro.util        :refer [returning mangle 
+                                      unmangle coerce]      ]
   )
   (:import
     [java.io              File BufferedReader               ]
@@ -76,17 +78,44 @@
   (let [match (drop 1 (re-find pattern line))]
     (apply hash-map (interleave parts match))))
 
+
+(defn update-values
+  "Updates values in map
+  Source: http://blog.jayfields.com/2011/08/clojure-apply-function-to-each-value-of.html"
+  [m f & args]
+  (reduce (fn [r [k v]] (assoc r k (apply f v args))) {} m))
+
+(defn clean-up-avro-entry 
+  "Returns the clean version of an entry"
+  [avro-entry int-fields]
+  ;this replaces - with nil
+  ;we need to replace nil with 0 when the type is int
+  ;there might be needed to check for string type nulls
+  (let  [
+          dash-to-nil   (update-values avro-entry #(if (= % "-") nil %))
+          nil-to-zero   (into {} 
+                          (for [[k v] dash-to-nil]
+                            [k (if (and (contains? int-fields k) (nil? v)) 0 v)]))
+          string-to-int (into {} 
+                          (for [[k v] nil-to-zero] 
+                            [k (if (and (contains? int-fields k) (string? v)) (read-string v) v)]))
+        ]
+  string-to-int
+  ))  
+
 (defn process-files
   "Iterates over all entries " 
   [s3-log-pattern schema-file days aws-s3-connection bucket prefix]
   (log/info days s3-log-pattern schema-file days aws-s3-connection bucket prefix)
   (let [  
-          s3-log-avro-schema-json   (json/parse-stream (io/reader schema-file))
-          s3-log-avro-schema-fields (map keyword (map #(get-in % ["name"]) 
-                                      (get-in s3-log-avro-schema-json ["fields"])))
-          s3-log-avro-schema        (avro-schema schema-file)
-          _                         (log/info (type s3-log-avro-schema))
-
+          s3-log-avro-schema-json           (json/parse-stream (io/reader schema-file))
+          s3-log-avro-schema-fields         (map keyword (map #(get-in % ["name"]) 
+                                              (get-in s3-log-avro-schema-json ["fields"])))
+          s3-log-avro-schema-fields-dash    (for [k s3-log-avro-schema-fields] 
+                                              (keyword (string/replace (name k) #"_" "-")))
+          s3-log-avro-schema                (avro-schema schema-file)
+          _                                 (log/info (type s3-log-avro-schema))
+          int-fields                        #{:turn_around_time :http_status :total_time :bytes_sent :object_size}
           ]
 
   ;(first all-files-for-a-day)
@@ -107,22 +136,20 @@
                                       (int 1000)          ;max-keys
                                       '())                ;acc
               avro-file-name         (str day ".avro")
-              avro-file              (avro/data-file-writer "deflate" s3-log-avro-schema (str "data/" avro-file-name))
-              
-             
-          ]
+              ;avro-file              (avro/data-file-writer "deflate" s3-log-avro-schema (str "data/" avro-file-name))
+            ]
         (log/info "Processing day: " day)
         (doseq [file all-files-for-a-day]
           (let [  s3-key              (:key file)
                   _                   (log/info s3-key)
                   object-content      (s4/get-object-content-safe 
                                         (s4/get-object aws-s3-connection bucket s3-key))                  
-                  avro-entries      (map #(parse-line % s3-log-avro-schema-fields s3-log-pattern) object-content)
+                  avro-entries      (map #(parse-line % s3-log-avro-schema-fields-dash s3-log-pattern) object-content)
                 ]
             (doseq [avro-entry avro-entries]
               (log/info "adding entry")
 
-              ;(clean up avro-entry)
+              (log/info (clean-up-avro-entry avro-entry int-fields))
 
               ;{:turn_around_time "22", :http_status "200", 
               ;:key "logs/2015-12-08-03-40-14-00BF9041E4921944", 
@@ -136,11 +163,12 @@
               ;:object_size "396", :bucket "www.streambrightdata.com", 
               ;:request_id "5B49BD4E3BE026CD"}
 
-              (.append avro-file avro-entry)
+              (prn (clean-up-avro-entry avro-entry int-fields))
+              (log/info ".")
             )))
   
         ;file close
-        (.close avro-file)
+        ;(.close avro-file)
       ))))
 
 (defn -main
