@@ -1,28 +1,15 @@
 { 
   :aws {
-    :credentials ".aws.edn" 
+    :credentials-file ".aws.edn" 
+    :log-format "(\\S+) ([a-z0-9][a-z0-9-.]+) \\[(.*\\+.*)\\] (\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b) (\\S+) (\\S+) (\\S+) (\\S+) \"(\\w+\\ \\S+ \\S+)\" (\\d+|\\-) (\\S+) (\\d+|\\-) (\\d+|\\-) (\\d+|\\-) (\\d+|\\-) \"(https?\\:\\/\\/.*\\/?|\\-)\" \"(.*)\" (\\S+)"
     :s3 {
       :bucket :www.streambrightdata.com
+      :folder "logs/"
       :region :us-east-1
     }
   }
-  :env {
-    :dev {
-      :min-conn 10
-      :max-conn 15
-      :thread-count 3
-      :thread-wait 1000
-      :channel-timeout 5000
-    }
-    :prod {
-      :min-conn 16
-      :max-conn 64
-      :thread-count 32
-      :thread-wait 5000
-      :channel-timeout 10000
-    }
-  }
-  :avro-schemas {
-    :amazon-log-schema {}
-  }
+  :days {
+    :start 2     ; starts the processing x days ago
+    :stop  12    ; stops the processing y days ago, processing 10 days worth of data 
+  } 
 };end

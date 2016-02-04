@@ -50,24 +50,21 @@
         ;keeping the original error and let it fall through
         file-string)))
 
-; (def config                   (cli/process-config "conf/app.edn"))
-; (def credentials              (:ok (get-credentials (get-in config [:ok :aws :credentials]))))
-; (def bucket                   (name (get-in config [:ok :aws :s3 :bucket])))
-; (def aws-basic-cred           (s4/create-basic-aws-credentials credentials))
-; (def aws-s3-connection        (s4/connect-with-basic-credentials aws-basic-cred)
-; (def list-object-request      (s4/create-list-object-request bucket "logs/" "" "" (int 1000))
-; (def aws-s3-object-listing    (s4/list-objects aws-s3-connection list-object-request)
-; (def aws-s3-object-summaries  (s4/get-object-summaries aws-s3-object-listing)
-;
-;
-; https://github.com/clojure-cookbook/clojure-cookbook/blob/master/01_primitive-data/1-32_gregorian-lazyseq.asciidoc
-(defn daily-from-epoch [start-year start-month]
+(defn days
+  "Returns a list with all the days in between days-start and days-stop
+  The input parameters are relativ from now()" 
+  [days-start days-stop]
   (let [  ^SimpleDateFormat   format-string (SimpleDateFormat. "yyyy-MM-dd")
-          ^GregorianCalendar  start-date    (GregorianCalendar. start-year start-month 0 0 0) ]
-    (map #(.format format-string (.getTime  %)) (repeatedly
-      (fn []
-        (.add start-date java.util.Calendar/DAY_OF_YEAR 1)
-        (.clone start-date)))))) 
+          ^GregorianCalendar  today         (GregorianCalendar.)
+                              start-date    (.add today java.util.Calendar/DAY_OF_YEAR (* -1 days-start)) 
+        ]
+  (reverse 
+    (take days-stop 
+      (map #(.format format-string (.getTime  %))
+        (repeatedly
+          (fn []
+            (.add today java.util.Calendar/DAY_OF_YEAR -1)
+            (.clone today))))))))
 
 (defn avro-schema
   "Returns an Avro schema"
@@ -78,7 +75,6 @@
   (let [match (drop 1 (re-find pattern line))]
     (apply hash-map (interleave parts match))))
 
-
 (defn update-values
   "Updates values in map
   Source: http://blog.jayfields.com/2011/08/clojure-apply-function-to-each-value-of.html"
@@ -86,11 +82,10 @@
   (reduce (fn [r [k v]] (assoc r k (apply f v args))) {} m))
 
 (defn clean-up-avro-entry 
-  "Returns the clean version of an entry"
+  "Returns the clean version of an entry, 
+  replaces - with nil, nil with 0 (only for int fields) and 
+  converts int values to be actually an integer"
   [avro-entry int-fields]
-  ;this replaces - with nil
-  ;we need to replace nil with 0 when the type is int
-  ;there might be needed to check for string type nulls
   (let  [
           dash-to-nil   (update-values avro-entry #(if (= % "-") nil %))
           nil-to-zero   (into {} 
@@ -106,7 +101,6 @@
 (defn process-files
   "Iterates over all entries " 
   [s3-log-pattern schema-file days aws-s3-connection bucket prefix]
-  (log/info days s3-log-pattern schema-file days aws-s3-connection bucket prefix)
   (let [  
           s3-log-avro-schema-json           (json/parse-stream (io/reader schema-file))
           s3-log-avro-schema-fields         (map keyword (map #(get-in % ["name"]) 
@@ -115,17 +109,9 @@
                                               (keyword (string/replace (name k) #"_" "-")))
           s3-log-avro-schema                (avro-schema schema-file)
           _                                 (log/info (type s3-log-avro-schema))
-          int-fields                        #{:turn_around_time :http_status :total_time :bytes_sent :object_size}
+          int-fields                        #{:turn-around-time :http-status :total-time :bytes-sent :object-size}
           ]
-
-  ;(first all-files-for-a-day)
-  ;{:bucket-name "www.streambrightdata.com", :e-tag "21b23f0b74d49f9ee619cf1899fc246b", 
-  ; :key "logs/2015-12-25-00-23-17-8AC95FEBE0374F7B", 
-  ; :last-modified #inst "2015-12-25T00:23:18.000-00:00",
-  ; :owner #object[com.amazonaws.services.s3.model.Owner 0x6aeb82e1 "S3Owner [name=s3-log-service,id=3272ee65a908a7677109fedda345db8d9554ba26398b2ca10581de88777e2b61]"], 
-  ; :size 395, :storage-class "STANDARD"}
   
-    ;"2015-12-12" "2015-12-13" "2015-12-14"
     (doseq [day days]
       (let [  all-files-for-a-day   (s4/list-all-files-eager 
                                       aws-s3-connection   ;connection
@@ -136,7 +122,7 @@
                                       (int 1000)          ;max-keys
                                       '())                ;acc
               avro-file-name         (str day ".avro")
-              ;avro-file              (avro/data-file-writer "deflate" s3-log-avro-schema (str "data/" avro-file-name))
+              avro-file              (avro/data-file-writer "deflate" s3-log-avro-schema (str "data/" avro-file-name))
             ]
         (log/info "Processing day: " day)
         (doseq [file all-files-for-a-day]
@@ -147,28 +133,19 @@
                   avro-entries      (map #(parse-line % s3-log-avro-schema-fields-dash s3-log-pattern) object-content)
                 ]
             (doseq [avro-entry avro-entries]
-              (log/info "adding entry")
 
-              (log/info (clean-up-avro-entry avro-entry int-fields))
+              (let [clean-avro-entry (clean-up-avro-entry avro-entry int-fields)]
 
-              ;{:turn_around_time "22", :http_status "200", 
-              ;:key "logs/2015-12-08-03-40-14-00BF9041E4921944", 
-              ;:remote_ip "10.144.194.145", :total_time "49", :version_id "-", 
-              ;:bytes_sent "-", :time "08/Dec/2015:03:40:14 +0000", 
-              ;:operation "REST.PUT.OBJECT", :user_agent "aws-internal/3", :error_code "-", 
-              ;:request_uri "PUT /www.streambrightdata.com/logs/2015-12-08-03-40-14-00BF9041E4921944 HTTP/1.1", 
-              ;:referrer "-", 
-              ;:requester "3272ee65a908a7677109fedda345db8d9554ba26398b2ca10581de88777e2b61",
-              ;:bucket_owner "f2b98d9dd4d99c07ad532dc8a7daf9639e5362e084f9d3ac74f67ed516040f03", 
-              ;:object_size "396", :bucket "www.streambrightdata.com", 
-              ;:request_id "5B49BD4E3BE026CD"}
-
-              (prn (clean-up-avro-entry avro-entry int-fields))
-              (log/info ".")
-            )))
+              (log/debug clean-avro-entry)
+              (try
+                (.append avro-file clean-avro-entry)
+                (catch Exception e (log/error "caught exception: " (.getMessage e) 
+                                              " key: " s3-key 
+                                              " clean avro: " clean-avro-entry)))
+            ))))
   
         ;file close
-        ;(.close avro-file)
+        (.close avro-file)
       ))))
 
 (defn -main
@@ -179,16 +156,20 @@
         {:keys [options arguments errors summary]}  cli-options-parsed
         config                                      (cli/process-config (:config options))
         env                       (keyword (:env options))
-        credentials               (:ok (get-credentials (get-in config [:ok :aws :credentials])))
+        credentials-file          (:ok (get-credentials (get-in config [:ok :aws :credentials-file])))
         bucket                    (name (get-in config [:ok :aws :s3 :bucket]))
-        aws-basic-cred            (s4/create-basic-aws-credentials credentials)
+        aws-basic-cred            (s4/create-basic-aws-credentials credentials-file)
         aws-s3-connection         (s4/connect-with-basic-credentials aws-basic-cred)
-        days                      (take 10 (daily-from-epoch 2015 11))
+        days-start                (get-in config [:ok :days :start])
+        days-stop                 (get-in config [:ok :days :stop])
+        days                      (days days-start days-stop)
+        s3-folder                 (get-in config [:ok :aws :s3 :folder])
         schema-file               "schema/amazon-log.avsc"
-        s3-log-pattern            #"(\S+) ([a-z0-9][a-z0-9-.]+) \[(.*\+.*)\] (\b(?:\d{1,3}\.){3}\d{1,3}\b) (\S+) (\S+) (\S+) (\S+) \"(\w+\ \S+ \S+)\" (\d+|\-) (\S+) (\d+|\-) (\d+|\-) (\d+|\-) (\d+|\-) \"(\S+)\" \"(\S+)\" (\S+)"
-        _                         (log/info s3-log-pattern)
+        s3-log-pattern            (re-pattern (get-in config [:ok :aws :log-format]))
         ]
-        (process-files s3-log-pattern schema-file days aws-s3-connection bucket "logs/")
+        
+        ; main entry point for execution 
+        (process-files s3-log-pattern schema-file days aws-s3-connection bucket s3-folder)
 
     (log/info "init :: stop")))
 

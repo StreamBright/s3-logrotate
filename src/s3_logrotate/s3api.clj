@@ -12,7 +12,7 @@
 ;; See the License for the specific language governing permissions and
 ;; limitations under the License.
 
-(ns ^{  :doc "Rotating logs for S3 buckets and converting the content to ORC or Avro"
+(ns ^{  :doc "Rotating logs for S3 buckets and converting the content Avro"
         :author "Istvan Szukacs"  } 
   s3-logrotate.s3api
   (:require
@@ -37,10 +37,7 @@
 
     [com.amazonaws.auth
              AWSCredentials
-             AWSCredentialsProvider
-             BasicAWSCredentials
-             BasicSessionCredentials
-             DefaultAWSCredentialsProviderChain]
+             BasicAWSCredentials]
 
     com.amazonaws.auth.profile.ProfileCredentialsProvider
     

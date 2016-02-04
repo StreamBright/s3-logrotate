@@ -3,4 +3,6 @@ target/
 .lein-repl-history
 .nrepl-port
 .lein-failures
-data/
+data/avro/
+data/logs/
+

@@ -20,7 +20,7 @@
       "doc": "The apparent Internet address of the requester. Intermediate proxies and firewalls might obscure the actual address of the machine making the request."
     }, {
       "name": "requester",
-      "type": "string",
+      "type": ["null", "string"],
       "doc": "The canonical user ID of the requester, or the string Anonymous  for unauthenticated requests."
     }, {
       "name": "request_id",
@@ -68,7 +68,7 @@
       "doc": "The value of the HTTP Referrer header, if present. HTTP user-agents (e.g. browsers) typically set this header to the URL of the linking or embedding page when making a request."
     }, {
       "name": "user_agent",
-      "type": "string",
+      "type": ["null", "string"],
       "doc": "The value of the HTTP User-Agent header."
     }, {
       "name": "version_id",
