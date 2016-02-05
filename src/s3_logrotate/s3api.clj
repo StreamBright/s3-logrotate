@@ -148,8 +148,8 @@
     :size           (.getSize           s3-object-summary)
     :storage-class  (.getStorageClass   s3-object-summary) })
 
-(defn list-all-files-eager
-  "Returns a lazy-sequence of the items in a bucket or bucket/folder  "
+(defn list-all-files-eager-blocking
+  "Returns a sequence of the items in a bucket or bucket/folder  "
   [ ^AmazonS3Client amazon-s3-client ^String bucket-name ^String prefix 
     ^String marker ^String delimiter ^Integer max-keys ^PersistentList acc]
   (log/debug bucket-name acc)

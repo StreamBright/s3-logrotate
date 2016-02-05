@@ -69,9 +69,13 @@
 (defn avro-schema
   "Returns an Avro schema"
   ^Schema$RecordSchema [^String schema-file]
-  (avro/parse-schema (json/parse-stream (io/reader schema-file))))
+  (avro/parse-schema 
+    (json/parse-stream 
+      (io/reader schema-file))))
 
-(defn parse-line [line parts pattern]
+(defn parse-line 
+  "Parsing log lines into a hash-map based on a regexp"
+  [line parts pattern]
   (let [match (drop 1 (re-find pattern line))]
     (apply hash-map (interleave parts match))))
 
@@ -98,22 +102,32 @@
   string-to-int
   ))  
 
+(defn get-avro-schema-fields
+  "Returning the fields of an Avro schema"
+  [avro-schema-json]
+  (map keyword 
+    (map #(get-in % ["name"]) 
+      (get-in avro-schema-json ["fields"]))))
+
+(defn replace-field-names
+  "Replacing characters in keywords"
+  [fields replaced replace-by]
+  (for [k fields]
+    (keyword (string/replace (name k) (re-pattern replaced) replace-by))))
+
 (defn process-files
   "Iterates over all entries " 
   [s3-log-pattern schema-file days aws-s3-connection bucket prefix]
   (let [  
           s3-log-avro-schema-json           (json/parse-stream (io/reader schema-file))
-          s3-log-avro-schema-fields         (map keyword (map #(get-in % ["name"]) 
-                                              (get-in s3-log-avro-schema-json ["fields"])))
-          s3-log-avro-schema-fields-dash    (for [k s3-log-avro-schema-fields] 
-                                              (keyword (string/replace (name k) #"_" "-")))
+          s3-log-avro-schema-fields         (get-avro-schema-fields s3-log-avro-schema-json)
+          s3-log-avro-schema-fields-dash    (replace-field-names s3-log-avro-schema-fields "_" "-")
           s3-log-avro-schema                (avro-schema schema-file)
-          _                                 (log/info (type s3-log-avro-schema))
           int-fields                        #{:turn-around-time :http-status :total-time :bytes-sent :object-size}
           ]
   
     (doseq [day days]
-      (let [  all-files-for-a-day   (s4/list-all-files-eager 
+      (let [  all-files-for-a-day   (s4/list-all-files-eager-blocking 
                                       aws-s3-connection   ;connection
                                       bucket              ;bucket-name
                                       (str prefix day)    ;prefix, path eg. "logs/2015-01-01"
@@ -122,7 +136,7 @@
                                       (int 1000)          ;max-keys
                                       '())                ;acc
               avro-file-name         (str day ".avro")
-              avro-file              (avro/data-file-writer "deflate" s3-log-avro-schema (str "data/" avro-file-name))
+              avro-file              (avro/data-file-writer "deflate" s3-log-avro-schema (str "data/avro/" avro-file-name))
             ]
         (log/info "Processing day: " day)
         (doseq [file all-files-for-a-day]
@@ -158,12 +172,13 @@
         env                       (keyword (:env options))
         credentials-file          (:ok (get-credentials (get-in config [:ok :aws :credentials-file])))
         bucket                    (name (get-in config [:ok :aws :s3 :bucket]))
+        s3-folder                 (get-in config [:ok :aws :s3 :folder])
         aws-basic-cred            (s4/create-basic-aws-credentials credentials-file)
         aws-s3-connection         (s4/connect-with-basic-credentials aws-basic-cred)
         days-start                (get-in config [:ok :days :start])
         days-stop                 (get-in config [:ok :days :stop])
         days                      (days days-start days-stop)
-        s3-folder                 (get-in config [:ok :aws :s3 :folder])
+        avro-folder-on-disk       ""
         schema-file               "schema/amazon-log.avsc"
         s3-log-pattern            (re-pattern (get-in config [:ok :aws :log-format]))
         ]
